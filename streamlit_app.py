@@ -6,7 +6,7 @@ st.set_page_config(page_title="NorskAgent", page_icon="🇳🇴", layout="center
 API = "http://127.0.0.1:8000"  # FastAPI base URL
 
 st.title("NorskAgent 🇳🇴")
-mode = st.radio("Choose mode:", ["Evaluate (exam-style)", "Grammar Fix"], horizontal=True)
+mode = st.radio("Choose mode:", ["Evaluate (exam-style)", "Grammar Fix", "CEFR Score"], horizontal=False)
 
 text = st.text_area("Write a Norwegian sentence:", height=120, placeholder="Jer er trott")
 
@@ -24,7 +24,7 @@ if run:
         st.warning("Please enter a sentence.")
     else:
         try:
-            endpoint = "/evaluate" if "Evaluate" in mode else "/fix"
+            endpoint = "/evaluate" if "Evaluate" in mode else "/fix" if "Grammar" in mode else "/score"
             resp = requests.post(f"{API}{endpoint}", json={"text": text}, timeout=120)
             resp.raise_for_status()
             data = resp.json()

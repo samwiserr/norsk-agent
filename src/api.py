@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from src.agents.exam_agent import ExamAgent
 from src.agents.grammar_agent import GrammarAgent
 from fastapi.middleware.cors import CORSMiddleware
+from src.agents.scorer_agent import ScorerAgent
 
 # ---------- App setup ----------
 app = FastAPI(
@@ -48,3 +49,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+scorer_agent = ScorerAgent(model="mistral")
+
+class TextIn(BaseModel):
+    text: str
+
+@app.post("/score")
+def score(input: TextIn):
+    result = scorer_agent.score(input.text)
+    return {"mode": "score", "input": input.text, **result}
+
+    
