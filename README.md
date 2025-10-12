@@ -1,15 +1,37 @@
-# NorskAgent 🇳🇴
-An open-source AI-driven language exam tutor built with Agentic AI.
+# 🇳🇴 Norsk Agent – AI-Powered Norwegian Language Exam Assistant
 
-## Overview
-NorskAgent helps learners prepare for the official Norwegian language exams (A1–B1) using intelligent, interactive agents.
+**Norsk Agent** is an intelligent AI system designed to help learners prepare for the **Norwegian A1–B1 exams**.  
+It uses *agentic AI* concepts — each specialized agent (Exam, Grammar, and Scorer) collaborates to correct, explain, and rate user answers in real time.
 
-## Quickstart
-1. Create virtualenv: `python -m venv venv`
-2. Activate venv: `source venv/bin/activate` (or `venv\Scripts\activate` on Windows)
-3. Install deps: `pip install -r requirements.txt`
-4. Set `OPENAI_API_KEY` environment variable.
-5. Run: `uvicorn backend.app:app --reload`
+---
 
-## Project Structure
-See `backend/` for the FastAPI app and agent code.
+## 🧠 Overview
+
+| Agent | Purpose |
+|-------|----------|
+| **GrammarAgent** | Corrects grammar and spelling, provides simple explanations in English. |
+| **ExamAgent** | Acts like a Norwegian examiner — gives feedback, tips, and corrections. |
+| **ScorerAgent** | Evaluates CEFR level (A1–B1) and gives a numeric score with rationale. |
+
+All three agents run locally via **Ollama** using open models such as `llama3.2:1b` or `llama3.2:3b`.
+
+---
+
+## 🧰 Tech Stack
+
+- **Python 3.11+**
+- **FastAPI** (API layer)
+- **LangChain + langchain-ollama**
+- **Ollama** (local LLM inference)
+- **SQLite** (interaction logs)
+- **Streamlit** (frontend dashboard)
+- **Docker** + `docker-compose`
+
+---
+
+## 🚀 Quick Start
+
+### 1️⃣ Prerequisites
+- Install [Ollama](https://ollama.ai) and pull a model:
+  ```bash
+  ollama pull llama3.2:3b
