@@ -1,5 +1,11 @@
 import requests
 import streamlit as st
+import uuid
+
+# Create a stable session id once per browser session
+if "session_id" not in st.session_state:
+    st.session_state["session_id"] = str(uuid.uuid4())
+
 
 st.set_page_config(page_title="NorskAgent", page_icon="🇳🇴", layout="centered")
 
@@ -23,13 +29,29 @@ if run:
     if not text.strip():
         st.warning("Please enter a sentence.")
     else:
+        endpoint = "/evaluate" if "Evaluate" in mode else "/fix" if "Grammar" in mode else "/score"
+        headers = {"X-Session-Id": st.session_state["session_id"]}
+
         try:
-            endpoint = "/evaluate" if "Evaluate" in mode else "/fix" if "Grammar" in mode else "/score"
-            resp = requests.post(f"{API}{endpoint}", json={"text": text}, timeout=120)
+            resp = requests.post(
+                f"{API}{endpoint}",
+                json={"text": text},
+                headers=headers,
+                timeout=120
+            )
             resp.raise_for_status()
             data = resp.json()
-            st.subheader("Response")
-            st.code(data.get("result", ""), language="markdown")
+
+            if endpoint == "/score":
+                st.subheader("CEFR Result")
+                st.write(f"**Level:** {data.get('level')}")
+                st.write(f"**Score:** {data.get('score')}/100")
+                st.write("**Rationale:**")
+                st.code(data.get("rationale", ""), language="markdown")
+            else:
+                st.subheader("Response")
+                st.code(data.get("result", ""), language="markdown")
+
         except Exception as e:
-            st.error(f"Request failed: {e}\nMake sure the FastAPI server is running.")
-            st.info("Start it with:  uvicorn src.api:app --reload")
+            st.error(f"Request failed: {e}")
+            st.info("Make sure the FastAPI server is running:\n  uvicorn src.api:app --reload")

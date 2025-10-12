@@ -1,38 +1,57 @@
+# src/agents/scorer_agent.py
 from langchain_community.llms import Ollama
 from langchain.prompts import PromptTemplate
+import json, re
 
-RUBRIC = """
-You are a CEFR assessor for Norwegian (A1–B1). Given a single learner sentence:
-1) Assign a CEFR level from {levels} (pick ONE).
-2) Score 0–100.
-3) Justify briefly in English (<= 4 lines).
-Only return JSON with keys: level, score, rationale.
-"""
+RUBRIC = (
+    "You are a CEFR assessor for Norwegian (A1–B1). "
+    "Given ONE learner sentence, do three things:\n"
+    "1) Assign a CEFR level from [A1, A2, B1] (pick ONE).\n"
+    "2) Give a numeric score 0–100.\n"
+    "3) Justify briefly in English (max 4 lines).\n"
+    "IMPORTANT: Return STRICT JSON with keys exactly: level, score, rationale."
+)
 
 PROMPT = """{rubric}
 
 Sentence:
 {text}
 
-Return JSON only.
+Return JSON ONLY, e.g.:
+{{"level":"A2","score":62,"rationale":"..."}}
 """
 
 class ScorerAgent:
+    """CEFR scorer using a local Ollama model (e.g., mistral)."""
+
     def __init__(self, model: str = "mistral"):
         self.llm = Ollama(model=model)
         self.tmpl = PromptTemplate.from_template(PROMPT)
 
-    def score(self, text: str) -> dict:
-        prompt = self.tmpl.format(rubric=RUBRIC.format(levels="A1,A2,B1"), text=text)
-        raw = self.llm.invoke(prompt).strip()
-        # very simple JSON recovery
-        import json, re
+    def _json_recover(self, raw: str) -> dict:
+        # Try strict JSON first; otherwise scrape the first {...} block.
         try:
-            js = json.loads(raw)
+            return json.loads(raw)
         except Exception:
-            js = json.loads(re.search(r"\{.*\}", raw, re.S).group(0))
-        return {
-            "level": js.get("level", "A2"),
-            "score": int(js.get("score", 60)),
-            "rationale": js.get("rationale", "")
-        }
+            m = re.search(r"\{.*\}", raw, re.S)
+            if not m:
+                return {"level": "A2", "score": 60, "rationale": "Could not parse model output."}
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                return {"level": "A2", "score": 60, "rationale": "Non-JSON model output."}
+
+    def score(self, text: str) -> dict:
+        prompt = self.tmpl.format(rubric=RUBRIC, text=text)
+        raw = self.llm.invoke(prompt).strip()
+        data = self._json_recover(raw)
+        # Normalize/guard
+        level = str(data.get("level", "A2")).upper()
+        if level not in {"A1", "A2", "B1"}:
+            level = "A2"
+        try:
+            score = int(data.get("score", 60))
+        except Exception:
+            score = 60
+        rationale = str(data.get("rationale", "")).strip()
+        return {"level": level, "score": score, "rationale": rationale}

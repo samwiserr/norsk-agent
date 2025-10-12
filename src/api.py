@@ -55,7 +55,14 @@ class TextIn(BaseModel):
     text: str
 
 @app.post("/score")
-def score(input: TextIn):
+def score(input: TextIn, x_session_id: str | None = Header(default=None)):
+    """
+    CEFR scoring:
+    - level in [A1, A2, B1]
+    - score 0–100
+    - brief rationale (English)
+    """
     result = scorer_agent.score(input.text)
-    return {"mode": "score", "input": input.text, **result}
+    # (Memory not necessary here; scoring is stateless. Included session_id for consistency.)
+    return {"mode": "score", "session_id": x_session_id, "input": input.text, **result}
 
