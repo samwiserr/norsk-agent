@@ -5,6 +5,7 @@ from src.agents.exam_agent import ExamAgent
 from src.agents.grammar_agent import GrammarAgent
 from fastapi.middleware.cors import CORSMiddleware
 from src.agents.scorer_agent import ScorerAgent
+from fastapi import Header
 
 # ---------- App setup ----------
 app = FastAPI(
@@ -23,26 +24,24 @@ class TextIn(BaseModel):
 
 # ---------- Endpoints ----------
 @app.post("/evaluate")
-def evaluate(input: TextIn):
-    """
-    Exam-style evaluation:
-    - Corrected sentence
-    - Explanation (English)
-    - One tip
-    """
-    result = exam_agent.evaluate(input.text)
-    return {"mode": "evaluate", "input": input.text, "result": result}
+def evaluate(input: TextIn, x_session_id: str | None = Header(default=None)):
+    result = exam_agent.evaluate(input.text, session_id=x_session_id)
+    return {
+        "mode": "evaluate",
+        "session_id": x_session_id,
+        "input": input.text,
+        "result": result
+    }
 
 @app.post("/fix")
-def fix(input: TextIn):
-    """
-    Grammar fix:
-    - Corrected sentence
-    - Brief explanation (English)
-    """
-    result = grammar_agent.fix(input.text)
-    return {"mode": "fix", "input": input.text, "result": result}
-
+def fix(input: TextIn, x_session_id: str | None = Header(default=None)):
+    result = grammar_agent.fix(input.text, session_id=x_session_id)
+    return {
+        "mode": "fix",
+        "session_id": x_session_id,
+        "input": input.text,
+        "result": result
+    }
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],   # tighten later
@@ -60,4 +59,3 @@ def score(input: TextIn):
     result = scorer_agent.score(input.text)
     return {"mode": "score", "input": input.text, **result}
 
-    
