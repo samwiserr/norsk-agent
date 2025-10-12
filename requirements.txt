@@ -3,3 +3,4 @@ uvicorn
 langchain
 openai
 pydantic
+openai>=1.40.0
