@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"   # FastAPI API
+      - "8501:8501"   # Streamlit UI
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - OLLAMA_MODEL=llama3.2:1b      # << use tiny model by default
+    volumes:
+      - ./:/app
+    restart: unless-stopped

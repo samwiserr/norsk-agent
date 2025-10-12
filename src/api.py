@@ -1,47 +1,52 @@
-# src/api.py
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
 from src.agents.exam_agent import ExamAgent
 from src.agents.grammar_agent import GrammarAgent
-from fastapi.middleware.cors import CORSMiddleware
 from src.agents.scorer_agent import ScorerAgent
-from fastapi import Header
+from src.utils.db import log_interaction
 
-# ---------- App setup ----------
-app = FastAPI(
-    title="NorskAgent API",
-    description="Local agent endpoints powered by Ollama",
-    version="0.1.0",
-)
+app = FastAPI(title="NorskAgent API")
 
-# Create one instance of each agent to reuse (faster than re-creating each request)
-exam_agent = ExamAgent(model="mistral")
-grammar_agent = GrammarAgent(model="mistral")
+exam_agent = ExamAgent()
+grammar_agent = GrammarAgent()
+scorer_agent = ScorerAgent()
 
-# ---------- Request models ----------
 class TextIn(BaseModel):
     text: str
 
+
 # ---------- Endpoints ----------
 @app.post("/evaluate")
-def evaluate(input: TextIn, x_session_id: str | None = Header(default=None)):
-    result = exam_agent.evaluate(input.text, session_id=x_session_id)
-    return {
-        "mode": "evaluate",
-        "session_id": x_session_id,
-        "input": input.text,
-        "result": result
-    }
+def evaluate(input: TextIn, x_session_id: str | None = Header(default=None), dry_run: bool = False):
+    try:
+        if dry_run:
+            result = "Corrected: Jeg er trøtt.\nExplanation: Demo forklaring.\nTip: Øv på ø-lyden."
+        else:
+            result = exam_agent.evaluate(input.text, session_id=x_session_id)
+
+        log_interaction("evaluate", x_session_id, input.text, result)
+        return {
+            "mode": "evaluate",
+            "session_id": x_session_id,
+            "input": input.text,
+            "result": result
+        }
+    except Exception as e:
+        # surfaces the actual issue instead of a bare 500
+        raise HTTPException(status_code=503, detail=f"ExamAgent error: {e}")
+
 
 @app.post("/fix")
 def fix(input: TextIn, x_session_id: str | None = Header(default=None)):
-    result = grammar_agent.fix(input.text, session_id=x_session_id)
-    return {
-        "mode": "fix",
-        "session_id": x_session_id,
-        "input": input.text,
-        "result": result
-    }
+    try:
+        result = grammar_agent.fix(input.text, session_id=x_session_id)
+        log_interaction("fix", x_session_id, input.text, result)
+        return {"mode": "fix", "session_id": x_session_id, "input": input.text, "result": result}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"GrammarAgent error: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],   # tighten later
@@ -55,14 +60,36 @@ class TextIn(BaseModel):
     text: str
 
 @app.post("/score")
-def score(input: TextIn, x_session_id: str | None = Header(default=None)):
-    """
-    CEFR scoring:
-    - level in [A1, A2, B1]
-    - score 0–100
-    - brief rationale (English)
-    """
-    result = scorer_agent.score(input.text)
-    # (Memory not necessary here; scoring is stateless. Included session_id for consistency.)
-    return {"mode": "score", "session_id": x_session_id, "input": input.text, **result}
+def score(input: TextIn, x_session_id: str | None = Header(default=None), dry_run: bool = False):
+    try:
+        if dry_run:
+            payload = {"level": "A2", "score": 62, "rationale": "Demo: basic tense error; simple vocab correct."}
+        else:
+            payload = scorer_agent.score(input.text)  # returns dict {level, score, rationale}
 
+        # compact string for quick table views; keep full dict in meta
+        compact = f"Level: {payload['level']} | Score: {payload['score']}"
+        log_interaction("score", x_session_id, input.text, compact, meta=payload)
+
+        return {
+            "mode": "score",
+            "session_id": x_session_id,
+            "input": input.text,
+            **payload
+        }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"ScorerAgent error: {e}")
+
+@app.get("/health")
+def health():
+    import os, requests
+    base = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    model = os.getenv("OLLAMA_MODEL", "")
+    try:
+        r = requests.get(f"{base}/api/tags", timeout=3)
+        r.raise_for_status()
+        return {"ok": True, "ollama": "reachable", "base": base, "model": model}
+    except Exception as e:
+        return {"ok": False, "ollama": f"unreachable: {e}", "base": base, "model": model}
+
+    

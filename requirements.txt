@@ -4,3 +4,5 @@ langchain
 openai
 pydantic
 openai>=1.40.0
+langchain-ollama>=0.1.0
+

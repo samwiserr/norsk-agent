@@ -1,0 +1,29 @@
+# Python virtual env & caches
+venv/
+__pycache__/
+*.pyc
+
+# Local environment & secrets
+.env
+*.env
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Git & node artifacts
+.git
+.gitignore
+.gitattributes
+node_modules/
+.npm/
+
+# Large runtime files (generated at dev time)
+*.db
+*.sqlite
+*.sqlite3
+
+# Build artifacts
+dist/
+build/
