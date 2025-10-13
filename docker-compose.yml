@@ -2,11 +2,12 @@ services:
   app:
     build: .
     ports:
-      - "8000:8000"   # FastAPI API
-      - "8501:8501"   # Streamlit UI
+      - "8000:8000"   # FastAPI
+      - "8501:8501"   # Streamlit
     environment:
       - OLLAMA_HOST=http://host.docker.internal:11434
-      - OLLAMA_MODEL=llama3.2:1b      # << use tiny model by default
+      - OLLAMA_MODEL=llama3.2:1b      # start small; switch to 3b if your RAM allows
     volumes:
       - ./:/app
+      - ./norskagent.db:/app/norskagent.db   # persist logs on host
     restart: unless-stopped

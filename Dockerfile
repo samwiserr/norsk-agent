@@ -1,21 +1,31 @@
+# syntax=docker/dockerfile:1
 FROM python:3.11-slim
 
-ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    STREAMLIT_BROWSER_GATHERUSAGESTATS=false \
+    STREAMLIT_SERVER_HEADLESS=true
+
 WORKDIR /app
 
-# Install Python dependencies
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir fastapi uvicorn streamlit requests pandas langchain langchain-community
+# (Optional) install curl for debugging health checks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-# Copy project files
+# Install Python deps first (better layer caching)
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the project
 COPY . /app
 
-# Expose API and UI ports
+# Normalize potential Windows line endings on start.sh, then make it executable
+RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh
+
+# Expose API and Streamlit
 EXPOSE 8000 8501
 
-# Allow container to talk to host's Ollama
+# Talk to host's Ollama from inside the container
 ENV OLLAMA_HOST=http://host.docker.internal:11434
 
-# Start FastAPI and Streamlit using JSON CMD
-CMD ["bash", "-c", "uvicorn src.api:app --host 0.0.0.0 --port 8000 & streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port 8501"]
+# Start both services
+CMD ["/app/start.sh"]
