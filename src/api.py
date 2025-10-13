@@ -91,5 +91,15 @@ def health():
         return {"ok": True, "ollama": "reachable", "base": base, "model": model}
     except Exception as e:
         return {"ok": False, "ollama": f"unreachable: {e}", "base": base, "model": model}
+    
+
+@app.get("/")
+def root():
+    return {
+        "name": "NorskAgent API",
+        "endpoints": ["/fix", "/evaluate", "/score", "/health", "/docs"],
+        "docs": "/docs"
+    }
+
 
     
