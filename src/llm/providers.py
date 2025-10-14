@@ -94,6 +94,7 @@ def build_client(task: str = "general") -> LLMClient:
 
     # 1) Perplexity for reasoning if configured
     if task == "reasoning" and os.getenv("PPLX_API_KEY"):
+        print(f"🧠 [Router] Task={task} → Provider=Perplexity ({os.getenv('PPLX_MODEL_REASON')})")
         return OpenAICompatClient(
             api_key=os.getenv("PPLX_API_KEY"),
             model=os.getenv("PPLX_MODEL_REASON", "llama-3.1-sonar-large-128k-online"),
@@ -101,8 +102,9 @@ def build_client(task: str = "general") -> LLMClient:
             temperature=0.2,
         )
 
-    # 2) OpenAI (default for others, or reasoning if PPLX not set)
+    # 2) OpenAI (default for most other tasks)
     if os.getenv("OPENAI_API_KEY"):
+        print(f"⚡ [Router] Task={task} → Provider=OpenAI ({os.getenv('CLOUD_MODEL', 'gpt-4o-mini')})")
         model = os.getenv("CLOUD_MODEL") or os.getenv("OPENAI_MODEL_CHEAP", "gpt-4o-mini")
         return OpenAICompatClient(
             api_key=os.getenv("OPENAI_API_KEY"),
@@ -111,16 +113,18 @@ def build_client(task: str = "general") -> LLMClient:
             temperature=0.2,
         )
 
-    # 3) Gemini (as another cloud fallback)
+    # 3) Gemini fallback
     if os.getenv("GEMINI_API_KEY"):
+        print(f"🌸 [Router] Task={task} → Provider=Gemini ({os.getenv('GEMINI_MODEL', 'gemini-1.5-pro')})")
         return GeminiClient(
             api_key=os.getenv("GEMINI_API_KEY"),
             model=os.getenv("GEMINI_MODEL", "gemini-1.5-pro"),
             temperature=0.2,
         )
 
-    # 4) Ollama (local fallback)
+    # 4) Ollama local fallback
     if os.getenv("OLLAMA_MODEL"):
+        print(f"💻 [Router] Task={task} → Provider=Ollama ({os.getenv('OLLAMA_MODEL')})")
         return OllamaClient(
             model=os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
             temperature=0.2,
