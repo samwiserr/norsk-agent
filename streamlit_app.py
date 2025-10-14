@@ -1,57 +1,85 @@
+import os
+import json
 import requests
 import streamlit as st
-import uuid
 
-# Create a stable session id once per browser session
-if "session_id" not in st.session_state:
-    st.session_state["session_id"] = str(uuid.uuid4())
+# Try to use a hosted API if provided; otherwise run agents locally in-process
+API_BASE = os.getenv("API_BASE")  # e.g. "https://your-api.fly.dev"
+CLOUD_MODE = os.getenv("CLOUD_MODE", "0") == "1"
 
+st.set_page_config(page_title="Norsk Agent", page_icon="🇳🇴", layout="centered")
+st.title("🇳🇴 Norsk Agent")
 
-st.set_page_config(page_title="NorskAgent", page_icon="🇳🇴", layout="centered")
+st.caption(
+    "Grammar corrections, exam-style feedback and CEFR scoring for Norwegian (A1–B1). "
+    "Tip: Use proper diacritics (æ, ø, å)."
+)
 
-API = "http://127.0.0.1:8000"  # FastAPI base URL
+# ---------- Utilities ----------
+def call_api(endpoint: str, payload: dict):
+    """Call a hosted API if API_BASE is set."""
+    url = f"{API_BASE}{endpoint}"
+    r = requests.post(url, json=payload, timeout=60)
+    r.raise_for_status()
+    return r.json()
 
-st.title("NorskAgent 🇳🇴")
-mode = st.radio("Choose mode:", ["Evaluate (exam-style)", "Grammar Fix", "CEFR Score"], horizontal=False)
+def safe_error(e: Exception) -> str:
+    msg = str(e)
+    if "127.0.0.1" in msg or "localhost" in msg:
+        return (
+            "Unable to reach a local API at 127.0.0.1. "
+            "On Streamlit Cloud you should either set API_BASE to a public API URL, "
+            "or let the app call OpenAI directly (CLOUD_MODE=1)."
+        )
+    return msg
 
-text = st.text_area("Write a Norwegian sentence:", height=120, placeholder="Jer er trott")
+# ---------- UI ----------
+text = st.text_area("Skriv en setning på norsk:", height=120, placeholder="F.eks. Jer er trott")
+mode = st.selectbox("Velg modus", ["fix", "evaluate", "score"], index=0)
+go = st.button("Kjør")
 
-col1, col2 = st.columns([1,1])
-with col1:
-    run = st.button("Run")
-with col2:
-    clear = st.button("Clear")
-
-if clear:
-    st.experimental_rerun()
-
-if run:
-    if not text.strip():
-        st.warning("Please enter a sentence.")
-    else:
-        endpoint = "/evaluate" if "Evaluate" in mode else "/fix" if "Grammar" in mode else "/score"
-        headers = {"X-Session-Id": st.session_state["session_id"]}
-
-        try:
-            resp = requests.post(
-                f"{API}{endpoint}",
-                json={"text": text},
-                headers=headers,
-                timeout=120
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-            if endpoint == "/score":
-                st.subheader("CEFR Result")
-                st.write(f"**Level:** {data.get('level')}")
-                st.write(f"**Score:** {data.get('score')}/100")
-                st.write("**Rationale:**")
-                st.code(data.get("rationale", ""), language="markdown")
-            else:
-                st.subheader("Response")
+# ---------- Execution paths ----------
+if go and text.strip():
+    try:
+        if API_BASE:
+            # Remote API path (only if you host FastAPI somewhere)
+            if mode == "fix":
+                data = call_api("/fix", {"text": text})
                 st.code(data.get("result", ""), language="markdown")
+            elif mode == "evaluate":
+                data = call_api("/evaluate", {"text": text})
+                st.code(data.get("result", ""), language="markdown")
+            else:  # score
+                data = call_api("/score", {"text": text})
+                st.json(data)
+        else:
+            # In-process path (recommended on Streamlit Cloud)
+            # Call agents directly. In CLOUD_MODE=1 they will use OpenAI via langchain_openai.
+            from src.agents.grammar_agent import GrammarAgent
+            from src.agents.exam_agent import ExamAgent
+            from src.agents.scorer_agent import ScorerAgent
 
-        except Exception as e:
-            st.error(f"Request failed: {e}")
-            st.info("Make sure the FastAPI server is running:\n  uvicorn src.api:app --reload")
+            if mode == "fix":
+                out = GrammarAgent().fix(text)
+                st.code(out, language="markdown")
+            elif mode == "evaluate":
+                out = ExamAgent().evaluate(text)
+                st.code(out, language="markdown")
+            else:
+                out = ScorerAgent().score(text)
+                st.json(out)
+
+        st.success("Done ✅")
+    except Exception as e:
+        st.error(f"Request failed: {safe_error(e)}")
+
+# Footer info
+with st.expander("⚙️ Runtime info"):
+    st.write(
+        {
+            "API_BASE": API_BASE or "(none; using in-process agents)",
+            "CLOUD_MODE": CLOUD_MODE,
+            "CLOUD_MODEL": os.getenv("CLOUD_MODEL", ""),
+            "OPENAI_BASE_URL": os.getenv("OPENAI_BASE_URL", ""),
+        }
+    )
