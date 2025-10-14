@@ -24,13 +24,6 @@ with col_left:
         st.session_state.session_id = str(uuid.uuid4())
         st.success("Ny økt startet. Minne er nullstilt.")
 
-# Optional model override (useful in cloud; can be removed if you prefer env-only)
-with col_right:
-    default_model = os.getenv("CLOUD_MODEL", "gpt-4o-mini")
-    model_choice = st.selectbox("Cloud-modell", ["gpt-4o-mini", "gpt-4o"], index=0 if default_model == "gpt-4o-mini" else 1)
-    # Make it visible to agents that read CLOUD_MODEL
-    os.environ["CLOUD_MODEL"] = model_choice
-
 
 # ---------- Input UI ----------
 text = st.text_area("Skriv en setning på norsk:", height=140, placeholder="F.eks. Jer er trott")
