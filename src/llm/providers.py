@@ -88,18 +88,21 @@ class OllamaClient(LLMClient):
 def build_client(task: str = "general") -> LLMClient:
     """
     Selects the appropriate LLM provider based on available environment variables.
-
-    Args:
-        task: one of ['grammar', 'reasoning', 'scoring', 'general']
-    Returns:
-        LLMClient instance ready to use with .predict(prompt)
+    task: 'grammar' | 'reasoning' | 'scoring' | 'general'
     """
-
     routing = os.getenv("LLM_ROUTING", "auto").lower()
 
-    # ✅ 1) OpenAI (default cloud provider)
+    # 1) Perplexity for reasoning if configured
+    if task == "reasoning" and os.getenv("PPLX_API_KEY"):
+        return OpenAICompatClient(
+            api_key=os.getenv("PPLX_API_KEY"),
+            model=os.getenv("PPLX_MODEL_REASON", "llama-3.1-sonar-large-128k-online"),
+            base_url=os.getenv("PERPLEXITY_BASE_URL", "https://api.perplexity.ai"),
+            temperature=0.2,
+        )
+
+    # 2) OpenAI (default for others, or reasoning if PPLX not set)
     if os.getenv("OPENAI_API_KEY"):
-        from pprint import pprint
         model = os.getenv("CLOUD_MODEL") or os.getenv("OPENAI_MODEL_CHEAP", "gpt-4o-mini")
         return OpenAICompatClient(
             api_key=os.getenv("OPENAI_API_KEY"),
@@ -108,7 +111,7 @@ def build_client(task: str = "general") -> LLMClient:
             temperature=0.2,
         )
 
-    # ✅ 2) Gemini (if OpenAI not available)
+    # 3) Gemini (as another cloud fallback)
     if os.getenv("GEMINI_API_KEY"):
         return GeminiClient(
             api_key=os.getenv("GEMINI_API_KEY"),
@@ -116,12 +119,11 @@ def build_client(task: str = "general") -> LLMClient:
             temperature=0.2,
         )
 
-    # ✅ 3) Ollama (local fallback)
+    # 4) Ollama (local fallback)
     if os.getenv("OLLAMA_MODEL"):
         return OllamaClient(
             model=os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
             temperature=0.2,
         )
 
-    # 🚨 4) No providers found
     raise RuntimeError("No valid LLM provider configured. Check your environment variables.")
