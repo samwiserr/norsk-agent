@@ -6,109 +6,128 @@ import streamlit as st
 from src.agents.grammar_agent import GrammarAgent
 from src.agents.exam_agent import ExamAgent
 from src.agents.scorer_agent import ScorerAgent
-from src.llm.providers import build_client
 
 
-# ---------- Page setup ----------
+# ---------------- Page / session setup ----------------
 st.set_page_config(page_title="Norsk Agent", page_icon="🇳🇴", layout="centered")
 st.title("🇳🇴 Norsk Agent")
-st.caption("A1–B1 norsktrening: grammatikk, eksamensstil tilbakemelding og CEFR-scoring.")
+st.caption("Snakk norsk med en veileder. Få korrigering, forklaring og løpende CEFR-score (A1–B1).")
 
-# Session ID for memory (persists during a Streamlit session)
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 
-col_left, col_right = st.columns([1, 1])
-with col_left:
-    if st.button("🔄 Start ny økt (reset minne)"):
-        st.session_state.session_id = str(uuid.uuid4())
-        st.success("Ny økt startet. Minne er nullstilt.")
+if "messages" not in st.session_state:
+    st.session_state.messages = []  # [{role: "user"/"assistant", "content": "..."}]
+
+# rolling scores (EMA)
+if "ema" not in st.session_state:
+    st.session_state.ema = {"grammar": None, "logic": None, "vocab": None, "total": None}
+if "turns" not in st.session_state:
+    st.session_state.turns = 0
 
 
-# ---------- Input UI ----------
-text = st.text_area("Skriv en setning på norsk:", height=140, placeholder="F.eks. Jer er trott")
-mode = st.selectbox("Velg modus", ["fix", "evaluate", "score"], index=0)
-go = st.button("Kjør")
+# ---------------- Helpers ----------------
+def ema_update(prev, x, alpha=0.3):
+    if prev is None:
+        return x
+    return round(alpha * x + (1 - alpha) * prev, 2)
+
+def map_cefr(total):
+    # simple thresholds; tweak later
+    if total is None: return "—"
+    if total < 45: return "A1"
+    if total < 70: return "A2"
+    return "B1"
+
+def reset_session():
+    st.session_state.session_id = str(uuid.uuid4())
+    st.session_state.messages = []
+    st.session_state.ema = {"grammar": None, "logic": None, "vocab": None, "total": None}
+    st.session_state.turns = 0
 
 
-# ---------- Runtime panel (sidebar) ----------
-def _active_info(task: str):
-    """Return provider, model and endpoint chosen by the router for a given task."""
+# ---------------- Sidebar: live skill meter ----------------
+with st.sidebar:
+    st.subheader("📊 Fremdrift")
+    total = st.session_state.ema["total"] or 0
+    st.progress(int(total))  # 0–100
+    st.write(f"**Nivå (CEFR):** {map_cefr(st.session_state.ema['total'])}")
+
+    cols = st.columns(3)
+    cols[0].metric("Grammar", st.session_state.ema["grammar"] or 0)
+    cols[1].metric("Logic", st.session_state.ema["logic"] or 0)
+    cols[2].metric("Vocab", st.session_state.ema["vocab"] or 0)
+
+    st.caption(f"Økt: `{st.session_state.session_id[:8]}`  •  Tur: {st.session_state.turns}")
+    if st.button("🔄 Start ny samtale (nullstill)"):
+        reset_session()
+        st.rerun()
+
+
+# ---------------- Chat history ----------------
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# ---------------- Chat input ----------------
+user_text = st.chat_input("Skriv eller lim inn norsk her …")
+if user_text:
+    # 1) Show user message
+    st.session_state.messages.append({"role": "user", "content": user_text})
+    with st.chat_message("user"):
+        st.markdown(user_text)
+
+    # 2) Run agents
     try:
-        c = build_client(task)
-        t = type(c).__name__
-        if t == "OpenAICompatClient":
-            # If reasoning and Perplexity key is present, router uses Perplexity via OpenAI-compat client.
-            if task == "reasoning" and os.getenv("PPLX_API_KEY"):
-                return {
-                    "task": task, "provider": "Perplexity",
-                    "model": os.getenv("PPLX_MODEL_REASON", "llama-3.1-sonar-large-128k-online"),
-                    "endpoint": os.getenv("PERPLEXITY_BASE_URL", "https://api.perplexity.ai"),
-                }
-            # Otherwise OpenAI
-            return {
-                "task": task, "provider": "OpenAI",
-                "model": os.getenv("CLOUD_MODEL", os.getenv("OPENAI_MODEL_CHEAP", "gpt-4o-mini")),
-                "endpoint": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-            }
-        if t == "GeminiClient":
-            return {
-                "task": task, "provider": "Gemini",
-                "model": os.getenv("GEMINI_MODEL", "gemini-1.5-pro"),
-                "endpoint": "google-generativeai",
-            }
-        if t == "OllamaClient":
-            return {
-                "task": task, "provider": "Ollama",
-                "model": os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
-                "endpoint": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
-            }
-        return {"task": task, "provider": t, "model": "?", "endpoint": "?"}
+        sid = st.session_state.session_id
+        # a) grammar correction (short)
+        grammar_out = GrammarAgent().fix(user_text, session_id=sid)
+
+        # b) exam-style explanation/tip
+        eval_out = ExamAgent().evaluate(user_text, session_id=sid)
+
+        # c) scoring
+        score = ScorerAgent().score(user_text)
+        # Expect: {"level":"A2","score": 62,"rationale":"..."} or your richer version
+
+        # 3) Update EMA meters (if you later expand ScorerAgent to return grammar/logic/vocab separately, use those)
+        # For now, use total as 'score' and approximate subscores evenly if missing.
+        total_score = int(score.get("score", 60))
+        grammar_score = score.get("grammar", total_score)
+        logic_score = score.get("logic", total_score)
+        vocab_score = score.get("vocab", total_score)
+
+        st.session_state.ema["grammar"] = ema_update(st.session_state.ema["grammar"], int(grammar_score))
+        st.session_state.ema["logic"]   = ema_update(st.session_state.ema["logic"],   int(logic_score))
+        st.session_state.ema["vocab"]   = ema_update(st.session_state.ema["vocab"],   int(vocab_score))
+        st.session_state.ema["total"]   = ema_update(st.session_state.ema["total"],   total_score)
+        st.session_state.turns += 1
+
+        # 4) Compose assistant reply (tight and friendly)
+        reply = f"""**🔧 Correction**
+{grammar_out}
+
+**🧪 Evaluation**
+{eval_out}
+
+**📊 Score**
+Level: `{score.get('level','A2')}` • Total: `{total_score}`
+_{score.get('rationale','')}_"""
+
+        st.session_state.messages.append({"role": "assistant", "content": reply})
+
+        # 5) Render assistant message
+        with st.chat_message("assistant"):
+            st.markdown(reply)
+
+        st.toast("Oppdatert score!", icon="✅")
+
     except Exception as e:
-        return {"task": task, "provider": "ERROR", "model": str(e), "endpoint": ""}
+        err = f"Beklager, noe gikk galt. ({e})"
+        st.session_state.messages.append({"role": "assistant", "content": err})
+        with st.chat_message("assistant"):
+            st.error(err)
 
-
-def render_runtime_panel():
-    st.sidebar.header("⚙️ Runtime")
-    st.sidebar.write({"session_id": st.session_state.session_id})
-    for task in ("grammar", "reasoning", "scoring"):
-        info = _active_info(task)
-        st.sidebar.markdown(
-            f"**{task.title()}** → {info['provider']}\n\n"
-            f"- model: `{info['model']}`\n"
-            f"- endpoint: `{info['endpoint']}`"
-        )
-    st.sidebar.divider()
-    st.sidebar.write({
-        "CLOUD_MODE": os.getenv("CLOUD_MODE"),
-        "OPENAI_BASE_URL": os.getenv("OPENAI_BASE_URL"),
-        "CLOUD_MODEL": os.getenv("CLOUD_MODEL"),
-        "Perplexity?": bool(os.getenv("PPLX_API_KEY")),
-        "Gemini?": bool(os.getenv("GEMINI_API_KEY")),
-    })
-
-
-# ---------- Run selected task ----------
-if go and text.strip():
-    try:
-        if mode == "fix":
-            out = GrammarAgent().fix(text, session_id=st.session_state.session_id)
-            st.subheader("🔧 Korreksjon")
-            st.code(out, language="markdown")
-
-        elif mode == "evaluate":
-            out = ExamAgent().evaluate(text, session_id=st.session_state.session_id)
-            st.subheader("🧪 Vurdering")
-            st.code(out, language="markdown")
-
-        else:  # score
-            data = ScorerAgent().score(text)
-            st.subheader("📊 CEFR-score")
-            st.json(data)
-
-        st.success("Done ✅")
-    except Exception as e:
-        st.error(f"Request failed: {e}")
 
 # Render sidebar info at the end so it reflects any UI overrides (e.g., model choice)
 render_runtime_panel()
