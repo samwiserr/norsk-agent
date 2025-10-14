@@ -1,34 +1,92 @@
+# streamlit_app.py
 import os
+import uuid
 import streamlit as st
+
 from src.agents.grammar_agent import GrammarAgent
 from src.agents.exam_agent import ExamAgent
 from src.agents.scorer_agent import ScorerAgent
+from src.llm.providers import build_client
 
+
+# ---------- Page setup ----------
 st.set_page_config(page_title="Norsk Agent", page_icon="🇳🇴", layout="centered")
 st.title("🇳🇴 Norsk Agent")
-
 st.caption("A1–B1 norsktrening: grammatikk, eksamensstil tilbakemelding og CEFR-scoring.")
 
-text = st.text_area("Skriv en setning på norsk:", height=120, placeholder="F.eks. Jer er trott")
+# Session ID for memory (persists during a Streamlit session)
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
+col_left, col_right = st.columns([1, 1])
+with col_left:
+    if st.button("🔄 Start ny økt (reset minne)"):
+        st.session_state.session_id = str(uuid.uuid4())
+        st.success("Ny økt startet. Minne er nullstilt.")
+
+# Optional model override (useful in cloud; can be removed if you prefer env-only)
+with col_right:
+    default_model = os.getenv("CLOUD_MODEL", "gpt-4o-mini")
+    model_choice = st.selectbox("Cloud-modell", ["gpt-4o-mini", "gpt-4o"], index=0 if default_model == "gpt-4o-mini" else 1)
+    # Make it visible to agents that read CLOUD_MODEL
+    os.environ["CLOUD_MODEL"] = model_choice
+
+
+# ---------- Input UI ----------
+text = st.text_area("Skriv en setning på norsk:", height=140, placeholder="F.eks. Jer er trott")
 mode = st.selectbox("Velg modus", ["fix", "evaluate", "score"], index=0)
+go = st.button("Kjør")
 
-if st.button("Kjør") and text.strip():
+
+# ---------- Runtime panel (sidebar) ----------
+def _active_info(task: str):
+    """Return provider, model and endpoint chosen by the router for a given task."""
     try:
-        if mode == "fix":
-            out = GrammarAgent().fix(text)
-            st.code(out, language="markdown")
-        elif mode == "evaluate":
-            out = ExamAgent().evaluate(text)
-            st.code(out, language="markdown")
-        else:
-            out = ScorerAgent().score(text)
-            st.json(out)
-        st.success("Done ✅")
+        c = build_client(task)
+        t = type(c).__name__
+        if t == "OpenAICompatClient":
+            # If reasoning and Perplexity key is present, router uses Perplexity via OpenAI-compat client.
+            if task == "reasoning" and os.getenv("PPLX_API_KEY"):
+                return {
+                    "task": task, "provider": "Perplexity",
+                    "model": os.getenv("PPLX_MODEL_REASON", "llama-3.1-sonar-large-128k-online"),
+                    "endpoint": os.getenv("PERPLEXITY_BASE_URL", "https://api.perplexity.ai"),
+                }
+            # Otherwise OpenAI
+            return {
+                "task": task, "provider": "OpenAI",
+                "model": os.getenv("CLOUD_MODEL", os.getenv("OPENAI_MODEL_CHEAP", "gpt-4o-mini")),
+                "endpoint": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+            }
+        if t == "GeminiClient":
+            return {
+                "task": task, "provider": "Gemini",
+                "model": os.getenv("GEMINI_MODEL", "gemini-1.5-pro"),
+                "endpoint": "google-generativeai",
+            }
+        if t == "OllamaClient":
+            return {
+                "task": task, "provider": "Ollama",
+                "model": os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
+                "endpoint": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+            }
+        return {"task": task, "provider": t, "model": "?", "endpoint": "?"}
     except Exception as e:
-        st.error(f"Request failed: {e}")
+        return {"task": task, "provider": "ERROR", "model": str(e), "endpoint": ""}
 
-with st.expander("⚙️ Runtime info"):
-    st.write({
+
+def render_runtime_panel():
+    st.sidebar.header("⚙️ Runtime")
+    st.sidebar.write({"session_id": st.session_state.session_id})
+    for task in ("grammar", "reasoning", "scoring"):
+        info = _active_info(task)
+        st.sidebar.markdown(
+            f"**{task.title()}** → {info['provider']}\n\n"
+            f"- model: `{info['model']}`\n"
+            f"- endpoint: `{info['endpoint']}`"
+        )
+    st.sidebar.divider()
+    st.sidebar.write({
         "CLOUD_MODE": os.getenv("CLOUD_MODE"),
         "OPENAI_BASE_URL": os.getenv("OPENAI_BASE_URL"),
         "CLOUD_MODEL": os.getenv("CLOUD_MODEL"),
@@ -36,10 +94,28 @@ with st.expander("⚙️ Runtime info"):
         "Gemini?": bool(os.getenv("GEMINI_API_KEY")),
     })
 
-if st.button("🔎 Test OpenAI"):
-    from openai import OpenAI
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_BASE_URL"))
-    r = client.chat.completions.create(model=os.getenv("OPENAI_MODEL_CHEAP","gpt-4o-mini"),
-                                       messages=[{"role":"user","content":"Say OK only."}])
-    st.write("OpenAI says:", r.choices[0].message.content)
 
+# ---------- Run selected task ----------
+if go and text.strip():
+    try:
+        if mode == "fix":
+            out = GrammarAgent().fix(text, session_id=st.session_state.session_id)
+            st.subheader("🔧 Korreksjon")
+            st.code(out, language="markdown")
+
+        elif mode == "evaluate":
+            out = ExamAgent().evaluate(text, session_id=st.session_state.session_id)
+            st.subheader("🧪 Vurdering")
+            st.code(out, language="markdown")
+
+        else:  # score
+            data = ScorerAgent().score(text)
+            st.subheader("📊 CEFR-score")
+            st.json(data)
+
+        st.success("Done ✅")
+    except Exception as e:
+        st.error(f"Request failed: {e}")
+
+# Render sidebar info at the end so it reflects any UI overrides (e.g., model choice)
+render_runtime_panel()
