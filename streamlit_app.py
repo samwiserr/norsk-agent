@@ -127,7 +127,3 @@ _{score.get('rationale','')}_"""
         st.session_state.messages.append({"role": "assistant", "content": err})
         with st.chat_message("assistant"):
             st.error(err)
-
-
-# Render sidebar info at the end so it reflects any UI overrides (e.g., model choice)
-render_runtime_panel()
