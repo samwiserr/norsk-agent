@@ -1,5 +1,7 @@
 from src.agents.exam_agent import ExamAgent
 from src.agents.grammar_agent import GrammarAgent
+from dotenv import load_dotenv
+load_dotenv()
 
 def choose_mode() -> str:
     print("\nNorskAgent 🇳🇴  — Choose a mode:")
