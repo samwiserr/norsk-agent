@@ -1,7 +1,30 @@
 import os, json, re
-from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
 
+# ===== Cloud / Local switch =====
+CLOUD_MODE = os.getenv("CLOUD_MODE", "0") == "1"
+
+if CLOUD_MODE:
+    from langchain_openai import ChatOpenAI
+
+    def make_llm():
+        return ChatOpenAI(
+            model=os.getenv("CLOUD_MODEL", "gpt-4o-mini"),
+            api_key=os.getenv("OPENAI_API_KEY"),
+            base_url=os.getenv("OPENAI_BASE_URL", None),
+            temperature=0.2,
+        )
+else:
+    from langchain_ollama import OllamaLLM
+
+    def make_llm():
+        return OllamaLLM(
+            model=os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
+            temperature=0.2,
+            num_ctx=2048,
+        )
+
+# ===== Your rubric & prompt (JSON-only output) =====
 RUBRIC = (
     "You are a CEFR assessor for Norwegian (A1–B1). Given ONE learner sentence, do three things:\n"
     "1) Assign a CEFR level from [A1, A2, B1] (pick ONE).\n"
@@ -26,10 +49,7 @@ Return JSON ONLY.
 
 class ScorerAgent:
     def __init__(self, model: str | None = None):
-        base_url = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        model_name = model or os.getenv("OLLAMA_MODEL", "llama3.2:3b")
-        self.llm = OllamaLLM(model=model_name, temperature=0.2, num_ctx=2048)
-
+        self.llm = make_llm()
         self.tmpl = PromptTemplate.from_template(PROMPT)
 
     def _json_recover(self, raw: str) -> dict:
