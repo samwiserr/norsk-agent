@@ -111,4 +111,6 @@ if go and text.strip():
         st.error(f"Request failed: {e}")
 
 # Render sidebar info at the end so it reflects any UI overrides (e.g., model choice)
-render_runtime_panel()
+def render_runtime_panel():
+    return  # Disable runtime debug panel for public version
+
