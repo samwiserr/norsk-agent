@@ -25,7 +25,7 @@ if "ema" not in st.session_state:
     st.session_state.ema = {"grammar": None, "logic": None, "vocab": None, "total": None}
 if "turns" not in st.session_state:
     st.session_state.turns = 0
-# Step A: silent profile init
+# Silent profile store
 if "user_profile" not in st.session_state:
     st.session_state.user_profile = {"predicted_cefr": None, "ema_total": None}
 
@@ -50,14 +50,13 @@ def map_cefr(total):
         return "A1"
     if t < 70:
         return "A2"
-    return "B1"  # extend later if desired
+    return "B1"  # extend later
 
 def reset_session():
     st.session_state.session_id = str(uuid.uuid4())
     st.session_state.messages = []
     st.session_state.ema = {"grammar": None, "logic": None, "vocab": None, "total": None}
     st.session_state.turns = 0
-    # Step A reset
     st.session_state.user_profile = {"predicted_cefr": None, "ema_total": None}
 
 def next_question_from_topic(user_text: str, level: str) -> str:
@@ -65,21 +64,30 @@ def next_question_from_topic(user_text: str, level: str) -> str:
     level = level or "A2"
     seed = f"""You are a Norwegian oral examiner. Based on the user's last message:
 
-    
+User: {user_text}
+
+Write ONE short follow-up question in Norwegian at {level} level (A1/A2/B1). Keep it natural and under 120 characters.
+Return only the question."""
+    llm = build_client("reasoning")
+    out = llm.predict(seed).strip()
+    return out.split("\n")[0][:200]
+
 def safe_score(user_text: str):
     """Call ScorerAgent and ALWAYS return normalized fields:
        (level:str, total:int, grammar:int, logic:int, vocab:int, rationale:str)
     """
-    import json, re
     score = ScorerAgent().score(user_text)
 
     # 1) Ensure dict
     if not isinstance(score, dict):
         raw = str(score or "")
-        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.I)  # strip fences
+        # strip code fences if present
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.I)
+        # try strict parse
         try:
             score = json.loads(raw)
         except Exception:
+            # extract first {...} block
             m = re.search(r"\{.*\}", raw, re.S)
             if m:
                 try:
@@ -110,16 +118,6 @@ def safe_score(user_text: str):
 
     rationale = str(score.get("rationale", "")).strip()
     return level, total, grammar, logic, vocab, rationale
-
-
-
-User: {user_text}
-
-Write ONE short follow-up question in Norwegian at {level} level (A1/A2/B1). Keep it natural and under 120 characters.
-Return only the question."""
-    llm = build_client("reasoning")
-    out = llm.predict(seed).strip()
-    return out.split("\n")[0][:200]
 
 
 # ---------------- Header: compact meters + controls ----------------
@@ -198,13 +196,8 @@ if user_text:
         # b) Exam-style evaluation/tip
         eval_out = ExamAgent().evaluate(user_text, session_id=sid)
 
-        # c) Scoring (robust to non-JSON / messy output)
-        # --- Scoring (robust to non-JSON output) ---
-        score = ScorerAgent().score(user_text)
-
-# c) Scoring (robust)
+        # c) Scoring (robust)
         level, total_score, grammar_score, logic_score, vocab_score, rationale = safe_score(user_text)
-
 
         # Update EMA meters
         st.session_state.ema["grammar"] = ema_update(st.session_state.ema["grammar"], grammar_score)
@@ -213,15 +206,15 @@ if user_text:
         st.session_state.ema["total"]   = ema_update(st.session_state.ema["total"],   total_score)
         st.session_state.turns += 1
 
-        # Step B: silent profile update
+        # Silent profile update
         st.session_state.user_profile["predicted_cefr"] = level
         st.session_state.user_profile["ema_total"] = st.session_state.ema["total"]
 
-        # Step C: adaptive follow-up
+        # Follow-up question (adaptive to predicted level)
         level_for_follow = st.session_state.user_profile.get("predicted_cefr") or "A2"
         follow = next_question_from_topic(user_text, level_for_follow)
 
-        # Compose assistant reply (loop: correction → explanation → continue)
+        # Compose assistant reply (loop: correction → evaluation → continue)
         reply = f"""**🔧 Correction**
 {grammar_out}
 
