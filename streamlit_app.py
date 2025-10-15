@@ -150,6 +150,9 @@ if user_text:
 
         # c) Scoring (expects at least {"level": "...", "score": ...})
         score = ScorerAgent().score(user_text)
+        st.session_state.user_profile["predicted_cefr"] = score.get("level", "A2")
+        st.session_state.user_profile["ema_total"] = st.session_state.ema["total"]
+
 
         # Update EMA meters
         total_score = int(score.get("score", 60))
