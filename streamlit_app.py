@@ -1,6 +1,8 @@
 # streamlit_app.py
 import os
 import uuid
+import json
+import re
 import streamlit as st
 
 from src.agents.grammar_agent import GrammarAgent
@@ -23,6 +25,7 @@ if "ema" not in st.session_state:
     st.session_state.ema = {"grammar": None, "logic": None, "vocab": None, "total": None}
 if "turns" not in st.session_state:
     st.session_state.turns = 0
+# Step A: silent profile init
 if "user_profile" not in st.session_state:
     st.session_state.user_profile = {"predicted_cefr": None, "ema_total": None}
 
@@ -47,13 +50,14 @@ def map_cefr(total):
         return "A1"
     if t < 70:
         return "A2"
-    return "B1"
+    return "B1"  # extend later if desired
 
 def reset_session():
     st.session_state.session_id = str(uuid.uuid4())
     st.session_state.messages = []
     st.session_state.ema = {"grammar": None, "logic": None, "vocab": None, "total": None}
     st.session_state.turns = 0
+    # Step A reset
     st.session_state.user_profile = {"predicted_cefr": None, "ema_total": None}
 
 def next_question_from_topic(user_text: str, level: str) -> str:
@@ -67,7 +71,6 @@ Write ONE short follow-up question in Norwegian at {level} level (A1/A2/B1). Kee
 Return only the question."""
     llm = build_client("reasoning")
     out = llm.predict(seed).strip()
-    # Keep it to one line
     return out.split("\n")[0][:200]
 
 
@@ -138,7 +141,6 @@ if user_text:
     with st.chat_message("user"):
         st.markdown(user_text)
 
-    # Run agents
     try:
         sid = st.session_state.session_id
 
@@ -148,40 +150,64 @@ if user_text:
         # b) Exam-style evaluation/tip
         eval_out = ExamAgent().evaluate(user_text, session_id=sid)
 
-        # c) Scoring (expects at least {"level": "...", "score": ...})
+        # c) Scoring (robust to non-JSON / messy output)
+        # --- Scoring (robust to non-JSON output) ---
         score = ScorerAgent().score(user_text)
-        st.session_state.user_profile["predicted_cefr"] = score.get("level", "A2")
-        st.session_state.user_profile["ema_total"] = st.session_state.ema["total"]
 
-        # --- Step C: use CEFR level adaptively ---
-        level = st.session_state.user_profile.get("predicted_cefr") or "A2"
-        follow = next_question_from_topic(user_text, level)
-        # -----------------------------------------
+        # Normalize to dict if model returned a string or anything odd
+        if not isinstance(score, dict):
+            raw = str(score)
+            # strip code fences if present
+            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.I)
+            # try direct parse
+            try:
+                score = json.loads(raw)
+            except Exception:
+                # extract first {...} block
+                m = re.search(r"\{.*\}", raw, re.S)
+                if m:
+                    try:
+                        score = json.loads(m.group(0))
+                    except Exception:
+                        score = {}
+                else:
+                    score = {}
 
-        # (Then likely you append both results to chat history)
-        st.session_state.messages.append({"role": "assistant", "content": result})
-        st.session_state.messages.append({"role": "assistant", "content": follow})
+        # Final defaults & normalization
+        level = str(score.get("level", "A2")).strip().upper()
+        if level not in {"A1", "A2", "B1", "B2"}:
+            level = "A2"
 
+        try:
+            total_score = int(score.get("score", 60))
+        except Exception:
+            total_score = 60
+        total_score = max(0, min(100, total_score))
 
+        def _int_or_default(val, default):
+            try:
+                return int(val)
+            except Exception:
+                return default
+
+        grammar_score = _int_or_default(score.get("grammar", total_score), total_score)
+        logic_score   = _int_or_default(score.get("logic",   total_score), total_score)
+        vocab_score   = _int_or_default(score.get("vocab",   total_score), total_score)
 
         # Update EMA meters
-        total_score = int(score.get("score", 60))
-        grammar_score = int(score.get("grammar", total_score))
-        logic_score   = int(score.get("logic",   total_score))
-        vocab_score   = int(score.get("vocab",   total_score))
-
         st.session_state.ema["grammar"] = ema_update(st.session_state.ema["grammar"], grammar_score)
         st.session_state.ema["logic"]   = ema_update(st.session_state.ema["logic"],   logic_score)
         st.session_state.ema["vocab"]   = ema_update(st.session_state.ema["vocab"],   vocab_score)
         st.session_state.ema["total"]   = ema_update(st.session_state.ema["total"],   total_score)
         st.session_state.turns += 1
 
-        # Silent profile update
-        st.session_state.user_profile["predicted_cefr"] = score.get("level", map_cefr(st.session_state.ema["total"]))
+        # Step B: silent profile update
+        st.session_state.user_profile["predicted_cefr"] = level
         st.session_state.user_profile["ema_total"] = st.session_state.ema["total"]
 
-        # Follow-up question to continue the conversation
-        follow = next_question_from_topic(user_text, st.session_state.user_profile.get("predicted_cefr"))
+        # Step C: adaptive follow-up
+        level_for_follow = st.session_state.user_profile.get("predicted_cefr") or "A2"
+        follow = next_question_from_topic(user_text, level_for_follow)
 
         # Compose assistant reply (loop: correction → explanation → continue)
         reply = f"""**🔧 Correction**
@@ -191,7 +217,7 @@ if user_text:
 {eval_out}
 
 **📊 Score**
-Level: `{score.get('level','A2')}` • Total: `{total_score}`
+Level: `{level}` • Total: `{total_score}`
 _{score.get('rationale','')}_
 
 **👉 Fortsettelse**
