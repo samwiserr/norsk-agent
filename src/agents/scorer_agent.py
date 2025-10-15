@@ -18,20 +18,46 @@ Respond in JSON with:
 }}
 """
 
+def _json_recover(raw: str) -> dict:
+    try:
+        return json.loads(raw)
+    except Exception:
+        pass
+    m = re.search(r"\{.*\}", raw, re.S)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except Exception:
+            pass
+    return {"level": "A2", "score": 60, "rationale": "Could not parse model output."}
+
 class ScorerAgent:
-    def __init__(self):
-        self.llm = build_client()
-        self.tmpl = PromptTemplate.from_template("{rubric}\n\nText:\n{text}\n\nJSON:")
+    def __init__(self, model: str | None = None):
+        self.llm = build_client(task="scoring")
+        self.tmpl = PromptTemplate.from_template(PROMPT)
 
-    def score(self, text: str, session_id: str | None = None):
-        # Include persona in the context
+    def score(self, text: str) -> dict:
         prompt = CORE_PERSONA + "\n\n" + self.tmpl.format(rubric=RUBRIC, text=text)
-
-        # Get result from LLM
         raw = self.llm.predict(prompt).strip()
+        data = _json_recover(raw)
 
-        # Store in memory
-        memory.append(session_id, "user", text)
-        memory.append(session_id, "assistant", raw)
+        # normalize & validate
+        level = str(data.get("level", "A2")).upper()
+        if level not in {"A1", "A2", "B1", "B2"}:
+            level = "A2"
+        try:
+            score = int(data.get("score", 60))
+        except Exception:
+            score = 60
+        rationale = str(data.get("rationale", "")).strip()
 
-        return raw
+        # optional subscores passthrough if your prompt/LLM returns them
+        grammar = data.get("grammar")
+        logic   = data.get("logic")
+        vocab   = data.get("vocab")
+
+        out = {"level": level, "score": score, "rationale": rationale}
+        if grammar is not None: out["grammar"] = grammar
+        if logic   is not None: out["logic"]   = logic
+        if vocab   is not None: out["vocab"]   = vocab
+        return out
