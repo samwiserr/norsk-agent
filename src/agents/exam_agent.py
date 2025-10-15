@@ -1,12 +1,7 @@
-# src/agents/exam_agent.py
 from src.llm.providers import build_client
 from langchain.prompts import PromptTemplate
 from src.utils.memory import memory
 from src.prompts.persona import CORE_PERSONA
-# ...inside your template build:
-prompt = CORE_PERSONA + "\n\n" + self.prompt.format(system=SYSTEM_INSTRUCTIONS, text=text)
-
-
 
 SYSTEM_INSTRUCTIONS = (
     "Du er en norsk språksensor (A1–B1) som vurderer én setning av gangen.\n"
@@ -36,16 +31,17 @@ Explanation:
 Tip:
 """
 
-
 class ExamAgent:
     def __init__(self, model: str | None = None):
-        # Provider is chosen centrally (OpenAI/Gemini/Ollama) by the router
         self.llm = build_client(task="reasoning")
         self.prompt = PromptTemplate.from_template(EVAL_TEMPLATE)
 
     def evaluate(self, text: str, session_id: str | None = None) -> str:
         history = memory.get(session_id)
-        prompt = self.prompt.format(system=SYSTEM_INSTRUCTIONS, text=text)
+        # Persona + your evaluation prompt
+        prompt = CORE_PERSONA + "\n\n" + self.prompt.format(
+            system=SYSTEM_INSTRUCTIONS, text=text
+        )
 
         if history:
             prompt += "\n\nKontekst (tidligere meldinger):\n" + "\n".join(

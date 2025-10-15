@@ -4,9 +4,6 @@ from langchain.prompts import PromptTemplate
 from src.utils.memory import memory
 from src.prompts.persona import CORE_PERSONA
 
-# ...inside your template build:
-prompt = CORE_PERSONA + "\n\n" + self.prompt.format(system=SYSTEM_INSTRUCTIONS, text=text)
-
 
 
 SYSTEM_INSTRUCTIONS = (
@@ -46,7 +43,7 @@ class GrammarAgent:
 
     def fix(self, text: str, session_id: str | None = None) -> str:
         history = memory.get(session_id)
-        prompt = self.prompt.format(system=SYSTEM_INSTRUCTIONS, text=text)
+        prompt = CORE_PERSONA + "\n\n" + self.prompt.format(system=SYSTEM_INSTRUCTIONS, text=text)
 
         if history:
             prompt += "\n\nKontekst (tidligere meldinger):\n" + "\n".join(
