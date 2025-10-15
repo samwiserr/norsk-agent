@@ -3,6 +3,8 @@ import json
 import re
 from langchain.prompts import PromptTemplate
 from src.llm.providers import build_client
+from src.prompts.persona import CORE_PERSONA
+
 
 RUBRIC = (
     "You are a CEFR assessor for Norwegian (A1–B1). Given ONE learner sentence, do three things:\n"
@@ -49,7 +51,7 @@ class ScorerAgent:
         return {"level": "A2", "score": 60, "rationale": "Could not parse model output."}
 
     def score(self, text: str) -> dict:
-        prompt = self.tmpl.format(rubric=RUBRIC, text=text)
+        prompt = CORE_PERSONA + "\n\n" + self.tmpl.format(rubric=RUBRIC, text=text)
         raw = self.llm.predict(prompt).strip()
         data = self._json_recover(raw)
 
