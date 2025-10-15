@@ -4,19 +4,24 @@ from src.utils.memory import memory
 from src.prompts.persona import CORE_PERSONA
 from src.llm.providers import build_client
 
-RUBRIC = """You are an examiner grading Norwegian language output.
-Assess it based on:
-1. Grammar accuracy
-2. Vocabulary range
-3. Sentence structure
-4. Coherence
+PROMPT = """Analyze the student's Norwegian text and output a JSON object with:
+{
+  "level": "A1" | "A2" | "B1" | "B2",
+  "score": integer 0–100,
+  "rationale": "short reason for this level (max 3 sentences)"
+}
 
-Respond in JSON with:
-{{
-  "score": <float between 0 and 1>,
-  "feedback": "<one short paragraph>"
-}}
+Student text:
+{text}
 """
+
+RUBRIC = """CEFR-based grading rubric for Norskprøven:
+A1: Simple phrases and sentences, many errors but basic meaning clear.
+A2: Simple connected sentences, limited vocabulary, frequent grammar issues.
+B1: Handles familiar topics, some cohesion, moderate accuracy.
+B2: Complex ideas, few errors, wide vocabulary and strong cohesion.
+"""
+
 
 def _json_recover(raw: str) -> dict:
     try:
