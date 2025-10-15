@@ -65,6 +65,54 @@ def next_question_from_topic(user_text: str, level: str) -> str:
     level = level or "A2"
     seed = f"""You are a Norwegian oral examiner. Based on the user's last message:
 
+    
+def safe_score(user_text: str):
+    """Call ScorerAgent and ALWAYS return normalized fields:
+       (level:str, total:int, grammar:int, logic:int, vocab:int, rationale:str)
+    """
+    import json, re
+    score = ScorerAgent().score(user_text)
+
+    # 1) Ensure dict
+    if not isinstance(score, dict):
+        raw = str(score or "")
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.I)  # strip fences
+        try:
+            score = json.loads(raw)
+        except Exception:
+            m = re.search(r"\{.*\}", raw, re.S)
+            if m:
+                try:
+                    score = json.loads(m.group(0))
+                except Exception:
+                    score = {}
+            else:
+                score = {}
+
+    # 2) Normalize core fields
+    level = str(score.get("level", "A2")).strip().upper()
+    if level not in {"A1", "A2", "B1", "B2"}:
+        level = "A2"
+
+    def _to_int(val, default):
+        try:
+            return int(val)
+        except Exception:
+            return default
+
+    total = _to_int(score.get("score", 60), 60)
+    total = max(0, min(100, total))
+
+    # Optional subscores; default to total
+    grammar = _to_int(score.get("grammar", total), total)
+    logic   = _to_int(score.get("logic",   total), total)
+    vocab   = _to_int(score.get("vocab",   total), total)
+
+    rationale = str(score.get("rationale", "")).strip()
+    return level, total, grammar, logic, vocab, rationale
+
+
+
 User: {user_text}
 
 Write ONE short follow-up question in Norwegian at {level} level (A1/A2/B1). Keep it natural and under 120 characters.
@@ -154,45 +202,9 @@ if user_text:
         # --- Scoring (robust to non-JSON output) ---
         score = ScorerAgent().score(user_text)
 
-        # Normalize to dict if model returned a string or anything odd
-        if not isinstance(score, dict):
-            raw = str(score)
-            # strip code fences if present
-            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.I)
-            # try direct parse
-            try:
-                score = json.loads(raw)
-            except Exception:
-                # extract first {...} block
-                m = re.search(r"\{.*\}", raw, re.S)
-                if m:
-                    try:
-                        score = json.loads(m.group(0))
-                    except Exception:
-                        score = {}
-                else:
-                    score = {}
+# c) Scoring (robust)
+        level, total_score, grammar_score, logic_score, vocab_score, rationale = safe_score(user_text)
 
-        # Final defaults & normalization
-        level = str(score.get("level", "A2")).strip().upper()
-        if level not in {"A1", "A2", "B1", "B2"}:
-            level = "A2"
-
-        try:
-            total_score = int(score.get("score", 60))
-        except Exception:
-            total_score = 60
-        total_score = max(0, min(100, total_score))
-
-        def _int_or_default(val, default):
-            try:
-                return int(val)
-            except Exception:
-                return default
-
-        grammar_score = _int_or_default(score.get("grammar", total_score), total_score)
-        logic_score   = _int_or_default(score.get("logic",   total_score), total_score)
-        vocab_score   = _int_or_default(score.get("vocab",   total_score), total_score)
 
         # Update EMA meters
         st.session_state.ema["grammar"] = ema_update(st.session_state.ema["grammar"], grammar_score)
@@ -218,7 +230,7 @@ if user_text:
 
 **📊 Score**
 Level: `{level}` • Total: `{total_score}`
-_{score.get('rationale','')}_
+_{rationale}_
 
 **👉 Fortsettelse**
 {follow}
