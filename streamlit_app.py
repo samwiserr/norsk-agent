@@ -153,6 +153,16 @@ if user_text:
         st.session_state.user_profile["predicted_cefr"] = score.get("level", "A2")
         st.session_state.user_profile["ema_total"] = st.session_state.ema["total"]
 
+        # --- Step C: use CEFR level adaptively ---
+        level = st.session_state.user_profile.get("predicted_cefr") or "A2"
+        follow = next_question_from_topic(user_text, level)
+        # -----------------------------------------
+
+        # (Then likely you append both results to chat history)
+        st.session_state.messages.append({"role": "assistant", "content": result})
+        st.session_state.messages.append({"role": "assistant", "content": follow})
+
+
 
         # Update EMA meters
         total_score = int(score.get("score", 60))
