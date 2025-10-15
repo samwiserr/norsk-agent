@@ -76,7 +76,15 @@ def safe_score(user_text: str):
     """Call ScorerAgent and ALWAYS return normalized fields:
        (level:str, total:int, grammar:int, logic:int, vocab:int, rationale:str)
     """
-    score = ScorerAgent().score(user_text)
+    import json, re
+    from src.agents.scorer_agent import ScorerAgent
+
+    # Guard against exceptions in the agent
+    try:
+        score = ScorerAgent().score(user_text)
+    except Exception as e:
+        # absolute fallback – UI keeps working
+        return "A2", 60, 60, 60, 60, f"fallback due to error: {e}"
 
     # 1) Ensure dict
     if not isinstance(score, dict):
