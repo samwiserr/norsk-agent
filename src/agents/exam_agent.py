@@ -2,6 +2,10 @@
 from src.llm.providers import build_client
 from langchain.prompts import PromptTemplate
 from src.utils.memory import memory
+from src.prompts.persona import CORE_PERSONA
+# ...inside your template build:
+prompt = CORE_PERSONA + "\n\n" + self.prompt.format(system=SYSTEM_INSTRUCTIONS, text=text)
+
 
 
 SYSTEM_INSTRUCTIONS = (
