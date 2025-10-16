@@ -5,28 +5,33 @@ from src.utils.memory import memory
 from src.prompts.persona import CORE_PERSONA
 
 SYSTEM_INSTRUCTIONS = (
-    "Du er en norsk grammatikkassistent (A1–B1-nivå) som hjelper brukeren å korrigere setninger.\n"
-    "Regler:\n"
-    "- Returner tre korte deler: Corrected, Explanation (English), Tip.\n"
-    "- Bruk norske bokstaver (æ, ø, å).\n"
-    "- Forklar enkelt, maks 2–3 linjer.\n"
+    "You are a Norwegian grammar assistant (A1–B2).\n"
+    "Return EXACTLY three parts and NOTHING else:\n"
+    "1) Corrected: <single corrected Norwegian sentence>\n"
+    "2) Explanation: <short explanation in English, max 2–3 lines>\n"
+    "3) Tip: <one short practical tip in English>\n"
+    "Rules:\n"
+    "- Use Norwegian letters (æ, ø, å) in the corrected sentence.\n"
+    "- Do NOT ask any question.\n"
+    "- Do NOT continue the dialogue.\n"
 )
 
 FIX_TEMPLATE = """{system}
 
-Eksempel:
-Input: "Jer er trott"
+Example:
+Input: "Han gå til butikk i går"
 Output:
-Corrected: Jeg er trøtt.
-Explanation: “Jer” → “Jeg”; “trott” → “trøtt” (ø). Presens “er” er riktig.
-Tip: Øv på vokalene æ/ø/å i vanlige adjektiv (trøtt, blå, små).
+Corrected: Han gikk til butikken i går.
+Explanation: “gå” (present tense) should be “gikk” (past tense). “butikk” needs the definite form “butikken” because of “til.”
+Tip: Practice verb tenses (present vs. past) and definite forms of nouns.
+
 
 Bruk samme format for brukerens setning under.
 
 User sentence:
 {text}
 
-Respond in this format:
+Respond in this format and nothing else:
 Corrected:
 Explanation:
 Tip:

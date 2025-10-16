@@ -307,19 +307,19 @@ if user_text:
         st.session_state.user_profile["ema_total"] = st.session_state.ema["total"]
 
         # Compose assistant reply (loop: correction → evaluation → continue)
-        reply = f"""**🔧 Korrigering**
-{grammar_out}
+        reply = f"""**🔧 Correction**
+        {grammar_out}
 
-**🧪 Vurdering**
-{eval_out}
+        **🧪 Evaluation**
+        {eval_out}
 
-**📊 Poengsum**
-Nivå: `{level}` • Total: `{total_score}`
-_{rationale}_
+        **📊 Score**
+        Level: `{level}` • Total: `{total_score}`
+        _{rationale}_
 
-**👉 Fortsettelse**
-{follow}
-"""
+        **👉 Continue**
+        {follow}
+        """
 
         # Append + render assistant
         st.session_state.messages.append({"role": "assistant", "content": reply})
