@@ -22,7 +22,6 @@ Example:
 Input: "Han gå til butikk i går"
 Output:
 Corrected: Han gikk til butikken i går.
-Explanation: “gå” (present tense) should be “gikk” (past tense). “butikk” needs the definite form “butikken” because of “til.”
 Tip: Practice verb tenses (present vs. past) and definite forms of nouns.
 
 
@@ -33,7 +32,6 @@ User sentence:
 
 Respond in this format and nothing else:
 Corrected:
-Explanation:
 Tip:
 """
 
