@@ -308,18 +308,18 @@ if user_text:
 
         # Compose assistant reply (loop: correction → evaluation → continue)
         reply = f"""**🔧 Correction**
-        {grammar_out}
+{grammar_out}
 
-        **🧪 Evaluation**
-        {eval_out}
+**🧪 Evaluation**
+{eval_out}
 
-        **📊 Score**
-        Level: `{level}` • Total: `{total_score}`
-        _{rationale}_
+**📊 Score**
+Level: `{level}` • Total: `{total_score}`
+_{rationale}_
 
-        **👉 Continue**
-        {follow}
-        """
+**👉 Continue**
+{follow}
+"""
 
         # Append + render assistant
         st.session_state.messages.append({"role": "assistant", "content": reply})
