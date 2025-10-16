@@ -11,7 +11,6 @@ SYSTEM_INSTRUCTIONS = (
     "- Keep the explanation simple (maximum 2–3 lines).\n"
     "- Do NOT continue the dialogue.\n"
 )
-)
 
 EVAL_TEMPLATE = """{system}
 
