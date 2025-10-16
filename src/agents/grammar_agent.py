@@ -5,11 +5,11 @@ from src.utils.memory import memory
 from src.prompts.persona import CORE_PERSONA
 
 SYSTEM_INSTRUCTIONS = (
-    "You are a Norwegian grammar assistant (A1–B2).\n"
-    "Return EXACTLY three parts and NOTHING else:\n"
-    "1) Corrected: <single corrected Norwegian sentence>\n"
-    "2) Explanation: <short explanation in English, max 2–3 lines>\n"
-    "3) Tip: <one short practical tip in English>\n"
+    "You are a Norwegian Bokmål grammar assistant (A1–B2).\n"
+    "Return EXACTLY two parts and NOTHING else:\n"
+
+    "1) <single corrected Norwegian sentence>\n"
+    "2) Tip: <one short practical tip in English>\n"
     "Rules:\n"
     "- Use Norwegian letters (æ, ø, å) in the corrected sentence.\n"
     "- Do NOT ask any question.\n"
@@ -21,7 +21,7 @@ FIX_TEMPLATE = """{system}
 Example:
 Input: "Han gå til butikk i går"
 Output:
-Corrected: Han gikk til butikken i går.
+Han gikk til butikken i går.
 Tip: Practice verb tenses (present vs. past) and definite forms of nouns.
 
 
