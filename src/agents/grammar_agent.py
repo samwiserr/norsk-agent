@@ -6,10 +6,9 @@ from src.prompts.persona import CORE_PERSONA
 
 SYSTEM_INSTRUCTIONS = (
     "You are a Norwegian Bokmål grammar assistant (A1–B2).\n"
-    "Return EXACTLY two parts and NOTHING else:\n"
+    "Return EXACTLY one part and NOTHING else:\n"
 
     "1) <single corrected Norwegian sentence>\n"
-    "2) Tip: <one short practical tip in English>\n"
     "Rules:\n"
     "- Use Norwegian letters (æ, ø, å) in the corrected sentence.\n"
     "- Do NOT ask any question.\n"
@@ -22,8 +21,6 @@ Example:
 Input: "Han gå til butikk i går"
 Output:
 Han gikk til butikken i går.
-Tip: Practice verb tenses (present vs. past) and definite forms of nouns.
-
 
 Bruk samme format for brukerens setning under.
 
@@ -32,7 +29,6 @@ User sentence:
 
 Respond in this format and nothing else:
 Corrected:
-Tip:
 """
 
 class GrammarAgent:

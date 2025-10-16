@@ -4,29 +4,29 @@ from src.utils.memory import memory
 from src.prompts.persona import CORE_PERSONA
 
 SYSTEM_INSTRUCTIONS = (
-    "Du er en norsk språksensor (A1–B1) som vurderer én setning av gangen.\n"
-    "Regler:\n"
-    "- Returner tre korte deler: Corrected, Explanation (English), Tip.\n"
-    "- Bruk norske diakritiske tegn (æ, ø, å).\n"
-    "- Hold forklaringen enkel (maks 2–3 linjer).\n"
+    "You are a Norwegian Bokmål language evaluator (A1–B1) who reviews one sentence at a time.\n"
+    "Rules:\n"
+    "- Return exactly two short parts: Explanation (in English), Tip (in English).\n"
+    "- Use Norwegian letters (æ, ø, å) in examples.\n"
+    "- Keep the explanation simple (maximum 2–3 lines).\n"
+    "- Do NOT continue the dialogue.\n"
+)
 )
 
 EVAL_TEMPLATE = """{system}
 
-Eksempel:
+Example:
 Input: "Jer er trott"
 Output:
-Corrected: Jeg er trøtt.
-Explanation: “Jer” → “Jeg”; “trott” → “trøtt” (ø). Presens “er” er riktig.
-Tip: Øv på vokalene æ/ø/å i vanlige adjektiv (trøtt, blå, små).
+Explanation: “Jer” → “Jeg”; “trott” → “trøtt” (ø). The verb “er” is already correct in present tense.
+Tip: Practice the vowels æ/ø/å in common adjectives (trøtt = tired, blå = blue, små = small).
 
-Bruk samme format for brukerens setning under.
+Use the same format for the user’s sentence below.
 
 User sentence:
 {text}
 
 Respond in this format:
-Corrected:
 Explanation:
 Tip:
 """
