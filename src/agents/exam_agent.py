@@ -17,7 +17,7 @@ EVAL_TEMPLATE = """{system}
 Example:
 Input: "Jer er trott"
 Output:
-Explanation: “Jer” → “Jeg”; “trott” → “trøtt” (ø). The verb “er” is already correct in present tense.
+“Jer” → “Jeg”; “trott” → “trøtt” (ø). The verb “er” is already correct in present tense.
 Tip: Practice the vowels æ/ø/å in common adjectives (trøtt = tired, blå = blue, små = small).
 
 Use the same format for the user’s sentence below.
@@ -25,9 +25,6 @@ Use the same format for the user’s sentence below.
 User sentence:
 {text}
 
-Respond in this format:
-Explanation:
-Tip:
 """
 
 class ExamAgent:
