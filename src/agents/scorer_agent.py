@@ -7,16 +7,26 @@ from src.llm.providers import build_client
 from src.prompts.persona import CORE_PERSONA  # ok to keep for consistency
 
 # ---- Prompt & Rubric ----
-PROMPT = """You are an official Norskprøven examiner. Grade the student's SINGLE sentence (or short turn)
+PROMPT = """You are an official Bokmål Norskprøven examiner. Grade the student's SINGLE sentence (or short turn)
 and return STRICT JSON ONLY with these keys:
 
 {{
   "level": "A1" | "A2" | "B1" | "B2",
-  "score": <integer 0..100>,
+  "grammar": <integer 0..100>,
+  "logic": <integer 0..100>,
+  "vocab": <integer 0..100>,
+  "score": <integer 0..100>,  // overall
   "rationale": "<max 3 concise sentences>"
 }}
 
+Rules:
+- "grammar" = grammatical accuracy (morphology, agreement, word order, tense)
+- "logic"   = coherence/structure (clear meaning, cohesion, connectors)
+- "vocab"   = lexical range & appropriateness (word choice, collocations, spelling)
+- Compute overall "score" as: round(0.45*grammar + 0.25*logic + 0.30*vocab)
+
 Do not include any extra text, code fences, or commentary—return JSON ONLY.
+
 
 Student text:
 {text}
@@ -52,8 +62,9 @@ def _json_recover(raw: str) -> Dict[str, Any]:
     return {"level": "A2", "score": 60, "rationale": "Parser fallback: non-JSON model output."}
 
 class ScorerAgent:
-    def __init__(self, model: str | None = None):
-        self.llm = build_client(task="scoring")
+    def __init__(self, llm=None, model: str | None = None):
+        # allow injected client; fallback to router
+        self.llm = llm or build_client(task="scoring")
         self.tmpl = PromptTemplate.from_template(PROMPT)
 
     def score(self, text: str) -> Dict[str, Any]:
@@ -61,22 +72,33 @@ class ScorerAgent:
         raw = self.llm.predict(prompt).strip()
         data = _json_recover(raw)
 
-        # normalize
         level = str(data.get("level", "A2")).upper().strip()
         if level not in {"A1", "A2", "B1", "B2"}:
             level = "A2"
 
-        try:
-            score = int(data.get("score", 60))
-        except Exception:
-            score = 60
-        score = max(0, min(100, score))
+        def _clamp_int(v, default=60):
+            try:
+                v = int(v)
+            except Exception:
+                v = default
+            return max(0, min(100, v))
+
+        grammar = _clamp_int(data.get("grammar"), 60)
+        logic   = _clamp_int(data.get("logic"),   60)
+        vocab   = _clamp_int(data.get("vocab"),   60)
+
+        score = data.get("score")
+        if score is None:
+            score = round(0.45*grammar + 0.25*logic + 0.30*vocab)
+        score = _clamp_int(score, 60)
 
         rationale = str(data.get("rationale", "")).strip()
 
-        out: Dict[str, Any] = {"level": level, "score": score, "rationale": rationale}
-        # pass through optional subscores if present
-        for k in ("grammar", "logic", "vocab"):
-            if k in data:
-                out[k] = data[k]
-        return out
+        return {
+            "level": level,
+            "grammar": grammar,
+            "logic": logic,
+            "vocab": vocab,
+            "score": score,
+            "rationale": rationale,
+        }
