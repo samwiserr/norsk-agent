@@ -28,8 +28,9 @@ User sentence:
 """
 
 class ExamAgent:
-    def __init__(self, model: str | None = None):
-        self.llm = build_client(task="reasoning")
+    def __init__(self, llm=None, model: str | None = None):
+        # Injected LLM (cached) or routed client
+        self.llm = llm or build_client(task="reasoning")
         self.prompt = PromptTemplate.from_template(EVAL_TEMPLATE)
 
     def evaluate(self, text: str, session_id: str | None = None) -> str:
