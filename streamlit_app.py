@@ -307,7 +307,7 @@ if user_text:
         st.session_state.user_profile["ema_total"] = st.session_state.ema["total"]
 
         # Compose assistant reply (loop: correction → evaluation → continue)
-        reply = f"""**🔧 Correction**
+        reply = f"""**🔧 Correction:**
 {grammar_out}
 
 **🧪 Evaluation**
