@@ -28,12 +28,12 @@ def get_clients():
     }
 
 @st.cache_resource
-def get_agents(clients):
-    # Inject cached LLMs so each agent reuses the same client (faster, thread-safe)
+def get_agents():
+    # If your agents accept clients, inject them here; otherwise just instantiate.
     return {
-        "grammar": GrammarAgent(llm=clients["reasoning"]),
-        "exam":    ExamAgent(llm=clients["reasoning"]),
-        "scorer":  ScorerAgent(llm=clients["scoring"]),
+        "grammar": GrammarAgent(),
+        "exam": ExamAgent(),
+        "scorer": ScorerAgent(),
     }
 
 clients = get_clients()
