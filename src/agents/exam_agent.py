@@ -28,18 +28,24 @@ User sentence:
 """
 
 class ExamAgent:
-    def __init__(self, llm=None):
-        self.llm = llm or build_client("reasoning")
-        self.tmpl = PromptTemplate.from_template(PROMPT)
+    def __init__(self, llm=None, model: str | None = None):
+        # Injected LLM (cached) or routed client
+        self.llm = llm or build_client(task="reasoning")
+        self.prompt = PromptTemplate.from_template(SYSTEM_INSTRUCTIONS)
 
     def evaluate(self, text: str, session_id: str | None = None) -> str:
-        # No history injected: evaluate THIS sentence only
-        prompt = CORE_PERSONA + "\n\n" + self.tmpl.format(text=text)
-        raw = self.llm.predict(prompt).strip()
-        data = _json_recover(raw)
+        history = memory.get(session_id)
+        # Persona + your evaluation prompt
+        prompt = CORE_PERSONA + "\n\n" + self.prompt.format(
+            system=SYSTEM_INSTRUCTIONS, text=text
+        )
 
-        corrected   = (data.get("corrected") or "").strip()
-        explanation = (data.get("explanation") or "").strip()
-        tip         = (data.get("tip") or "").strip()
+        if history:
+            prompt += "\n\nKontekst (tidligere meldinger):\n" + "\n".join(
+                f"{m['role'].upper()}: {m['content']}" for m in history
+            )
 
-        return f"""Corrected: {corrected}
+        out = self.llm.predict(prompt).strip()
+        memory.append(session_id, "user", text)
+        memory.append(session_id, "assistant", out)
+        return out
