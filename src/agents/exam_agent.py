@@ -34,18 +34,13 @@ class ExamAgent:
         self.prompt = PromptTemplate.from_template(SYSTEM_INSTRUCTIONS)
 
     def evaluate(self, text: str, session_id: str | None = None) -> str:
-        history = memory.get(session_id)
-        # Persona + your evaluation prompt
-        prompt = CORE_PERSONA + "\n\n" + self.prompt.format(
-            system=SYSTEM_INSTRUCTIONS, text=text
-        )
+        # No history injected: evaluate THIS sentence only
+        prompt = CORE_PERSONA + "\n\n" + self.tmpl.format(text=text)
+        raw = self.llm.predict(prompt).strip()
+        data = _json_recover(raw)
 
-        if history:
-            prompt += "\n\nKontekst (tidligere meldinger):\n" + "\n".join(
-                f"{m['role'].upper()}: {m['content']}" for m in history
-            )
+        explanation = (data.get("explanation") or "").strip()
+        tip         = (data.get("tip") or "").strip()
 
-        out = self.llm.predict(prompt).strip()
-        memory.append(session_id, "user", text)
-        memory.append(session_id, "assistant", out)
-        return out
+Explanation: {explanation}
+Tip: {tip}"""
