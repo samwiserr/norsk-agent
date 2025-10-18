@@ -41,6 +41,4 @@ class ExamAgent:
 
         explanation = (data.get("explanation") or "").strip()
         tip         = (data.get("tip") or "").strip()
-
-Explanation: {explanation}
-Tip: {tip}"""
+"""
